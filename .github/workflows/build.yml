@@ -1,0 +1,108 @@
+# Builds ekPrinter on every push and pull request, and publishes a release on
+# a version tag.
+#
+# A Windows runner, because the agent publishes self-contained for win-x64 and
+# Inno Setup is a Windows compiler. Every push builds the installer too, so a
+# broken .iss is found on the commit that broke it rather than on release day.
+#
+# Tag a release to publish one:
+#     git tag v0.1.0 && git push origin v0.1.0
+name: Build
+
+on:
+  push:
+    branches: ['main']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp on the build
+        default: 0.0.0-dev
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Work out the version
+        id: version
+        shell: pwsh
+        run: |
+          $v = if ('${{ github.ref_type }}' -eq 'tag') {
+            '${{ github.ref_name }}' -replace '^v', ''
+          } elseif ('${{ inputs.version }}') {
+            '${{ inputs.version }}'
+          } else {
+            '0.0.0-dev'
+          }
+          "value=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Building $v"
+
+      # RuntimeIdentifier, SelfContained and PublishSingleFile live in the
+      # csproj, so a release is built exactly the way a developer builds locally.
+      - name: Publish the agent
+        run: dotnet publish -c Release -p:Version=${{ steps.version.outputs.value }}
+
+      # Installed rather than assumed: the .iss uses x64compatible, which needs
+      # Inno Setup 6.3+, and a release is the worst moment to find the runner
+      # image drifted. choco is a no-op when it is current.
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          # Inno's AppVersion must be numeric; drop any -suffix for the installer stamp.
+          $numeric = '${{ steps.version.outputs.value }}' -replace '-.*$', ''
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            /DAppVersion=$numeric `
+            installer\ekprinter.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Published in the release notes so a cautious operator — or an IT
+      # department that will not run an unsigned installer on trust — has
+      # something to check the download against.
+      - name: Hash the installer
+        id: hash
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist\ekPrinter-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "value=$h" >> $env:GITHUB_OUTPUT
+          Write-Host "SHA-256: $h"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ekPrinter-Setup
+          path: dist/ekPrinter-Setup.exe
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ekPrinter-Setup.exe
+          body: |
+            ekPrinter ${{ steps.version.outputs.value }} for Windows 10 and 11 (x64).
+
+            Download the installer and double-click it. The agent's page opens
+            with a pairing code; enter that code in the application you print
+            from. One install prints for every site paired with it.
+
+            **SHA-256**
+            ```
+            ${{ steps.hash.outputs.value }}
+            ```
+
+            Code signing is not in place yet, so Windows will warn that the
+            publisher is unrecognised. Verify the hash above before running the
+            installer.

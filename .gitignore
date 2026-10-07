@@ -1,0 +1,9 @@
+# Build output
+bin/
+obj/
+dist/
+
+# Rider / Visual Studio
+.idea/
+.vs/
+*.user

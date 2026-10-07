@@ -1,0 +1,16 @@
+ekPrinter
+Copyright 2026 Eickter Software & Supplies
+
+This product includes software developed by
+Eickter Software & Supplies (https://eickter.com).
+
+This product uses third-party software under its own licence:
+
+  - Microsoft.Web.WebView2 SDK (BSD-3-Clause)
+    https://www.nuget.org/packages/Microsoft.Web.WebView2
+
+The WebView2 Runtime it drives is installed separately, as part of Windows or
+from Microsoft, and is not distributed with ekPrinter.
+
+ekPrinter is an independent project. It is not affiliated with, derived from,
+or endorsed by QZ Industries or the QZ Tray project.

@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- net8.0-windows: the tray icon is WinForms' NotifyIcon, the HTML engine
+         is WebView2 hosted in a WinForms control, and raw printing goes through
+         winspool.drv. Windows-only is the decision, not an accident. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>EkPrinter</RootNamespace>
+    <AssemblyName>ekprinter</AssemblyName>
+    <Version>0.1.0</Version>
+
+    <!-- Unsigned is not the same as anonymous. These populate the version
+         resource, so Properties → Details names the publisher instead of
+         showing a blank pane. -->
+    <Company>Eickter Software &amp; Supplies</Company>
+    <Product>ekPrinter</Product>
+    <Description>Prints from web applications to this computer's printers</Description>
+    <Copyright>© 2026 Eickter Software &amp; Supplies</Copyright>
+    <ApplicationIcon>ekprinter.ico</ApplicationIcon>
+    <PlatformTarget>x64</PlatformTarget>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- No console window. The agent starts at login and runs all day; a black
+         terminal sitting on the taskbar invites someone to close it. The
+         pairing code and printer list live on the agent's own page instead. -->
+    <OutputType>WinExe</OutputType>
+
+    <!-- Publish defaults, so releasing is `dotnet publish -c Release`.
+         Self-contained because a shop cannot be asked to install a .NET
+         runtime first.
+
+         NOT single-file, deliberately — learned on ekSigner. Self-contained
+         plus PublishSingleFile produces a large executable that unpacks itself
+         at startup, and inside a solid-compressed installer the download has
+         the shape of a packed dropper. Defender deleted it on arrival. Loose
+         DLLs cost a bigger install directory and nothing else. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <!-- Not trimmed: minimal APIs, System.Text.Json and WinForms resolve types
+         by reflection, and a trimmed build fails at runtime, not build time. -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <!-- The Web SDK publishes IIS hosting assets. This is a desktop agent that
+         will never sit behind IIS. -->
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The SDK only. The browser engine itself is the Evergreen WebView2
+         Runtime that ships with Windows 10/11, so it is not bundled and it
+         updates with Edge. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+
+</Project>
