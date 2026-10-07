@@ -495,14 +495,16 @@ static bool TryPage(PageRequest? requested, out PageSize? page, out string probl
     problem = "";
     if (requested is null) return true;
 
-    if (requested.WidthMm is not (>= 20 and <= 1000))
+    // 5 mm: the smallest barcode label a shop is likely to print on. A page
+    // that small is legitimate; the minimum only stops a typo of 0.
+    if (requested.WidthMm is not (>= 5 and <= 1000))
     {
-        problem = "page.width_mm must be between 20 and 1000.";
+        problem = "page.width_mm must be between 5 and 1000.";
         return false;
     }
-    if (requested.HeightMm is { } h && h is not (>= 20 and <= 3000))
+    if (requested.HeightMm is { } h && h is not (>= 5 and <= 3000))
     {
-        problem = "page.height_mm must be between 20 and 3000, or omitted to fit the content.";
+        problem = "page.height_mm must be between 5 and 3000, or omitted to fit the content.";
         return false;
     }
 

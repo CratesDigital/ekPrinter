@@ -5,6 +5,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Pages as small as 5 × 5 mm are accepted, so small barcode labels print;
+  the minimum was 20 mm.
+
+## [0.1.0] — 2026-10-07
+
 ### Added
 - First version of the agent: a per-user Windows tray app on
   `http://127.0.0.1:8421`.

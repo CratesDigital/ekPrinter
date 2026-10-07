@@ -116,7 +116,7 @@ Paired origins only. Renders an HTML document with the Chromium engine
 | `html` | — | Required. A complete document |
 | `base_url` | your origin + `/` | Where the document "lives": relative URLs resolve against it. Must be on **your own origin** |
 | `copies` | 1 | 1–20 |
-| `page` | the printer's default paper | `width_mm` (20–1000) and `height_mm` (20–3000). **Leave out `height_mm` to fit the page to the content** — what a receipt printer needs to cut under the last line |
+| `page` | the printer's default paper | `width_mm` (5–1000) and `height_mm` (5–3000). **Leave out `height_mm` to fit the page to the content** — what a receipt printer needs to cut under the last line |
 | `margins_mm` | all 0 | Each 0–100 |
 | `color` | true | false prints grayscale |
 | `backgrounds` | true | Print CSS backgrounds and colours |
