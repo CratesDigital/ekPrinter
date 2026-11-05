@@ -15,6 +15,7 @@
 using System.Drawing;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -68,6 +69,13 @@ internal sealed class HtmlPrinter
 
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan FontTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan RenderTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// A direct image no longer than this stays inside what the engine can
+    /// capture in one piece (about 16,000 dots at 203 dpi).
+    /// </summary>
+    private const double MaxImageHeightMm = 2000;
 
     private readonly UiThread _ui;
     private readonly string _profileDir;
@@ -116,6 +124,114 @@ internal sealed class HtmlPrinter
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Renders the job to a PNG at the head's own resolution, for sending
+    /// straight to the printer. Nothing reaches the Windows driver.
+    /// </summary>
+    public async Task<byte[]> RenderAsync(HtmlJob job, double maxWidthMm, int dotsPerMm, CancellationToken cancellation)
+    {
+        await _gate.WaitAsync(cancellation);
+        try
+        {
+            return await _ui.InvokeAsync(() => RenderOnUiThreadAsync(job, maxWidthMm, dotsPerMm));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<byte[]> RenderOnUiThreadAsync(HtmlJob job, double maxWidthMm, int dotsPerMm)
+    {
+        var core = await EnsureWebViewAsync();
+
+        _active = new ActiveJob(job.DocumentUri, Encoding.UTF8.GetBytes(job.Html));
+        var emulating = false;
+        try
+        {
+            await LoadAsync(core, job.DocumentUri);
+            await EmulatePrintMediaAsync(core);
+            await WaitForFontsAsync(core);
+
+            // The page margins are not added here: the printer's own edge and
+            // the document's padding already keep the print off the paper's edge.
+            var widthMm = Math.Min(job.Page?.WidthMm ?? maxWidthMm, maxWidthMm);
+            var widthPx = (int)Math.Round(widthMm / MmPerInch * CssPxPerInch);
+
+            await DevToolsAsync(core, "Emulation.setDeviceMetricsOverride", JsonSerializer.Serialize(new
+            {
+                width = widthPx,
+                height = 800,
+                deviceScaleFactor = dotsPerMm * MmPerInch / CssPxPerInch,
+                mobile = false,
+            }));
+            emulating = true;
+
+            var heightPx = job.Page?.HeightMm is { } fixedMm
+                ? (int)Math.Ceiling(fixedMm / MmPerInch * CssPxPerInch)
+                : await MeasureContentHeightPxAsync(core);
+
+            if (heightPx / CssPxPerInch * MmPerInch > MaxImageHeightMm)
+                throw new PrintFailure("too_long", "The document is too long to print as one image.");
+
+            var reply = await DevToolsAsync(core, "Page.captureScreenshot", JsonSerializer.Serialize(new
+            {
+                format = "png",
+                captureBeyondViewport = true,
+                clip = new { x = 0, y = 0, width = widthPx, height = heightPx, scale = 1 },
+            }));
+
+            using var parsed = JsonDocument.Parse(reply);
+            return parsed.RootElement.GetProperty("data").GetBytesFromBase64();
+        }
+        finally
+        {
+            _active = null;
+            if (emulating)
+            {
+                try
+                {
+                    await core.CallDevToolsProtocolMethodAsync("Emulation.clearDeviceMetricsOverride", "{}");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[print] could not reset the page size: {ex.Message}");
+                }
+            }
+        }
+    }
+
+    /// <summary>A hung engine must fail the job, so the site can fall back to its print dialog.</summary>
+    private static async Task<string> DevToolsAsync(CoreWebView2 core, string method, string parameters)
+    {
+        var call = core.CallDevToolsProtocolMethodAsync(method, parameters);
+        var finished = await Task.WhenAny(call, Task.Delay(RenderTimeout));
+        if (finished != call)
+            throw new PrintFailure("render_timeout", "The document took too long to render.");
+        return await call;
+    }
+
+    /// <summary>
+    /// The content's own height. Not the root's scrollHeight: that is never less
+    /// than the window, which would add blank paper under a short receipt.
+    /// </summary>
+    private static async Task<int> MeasureContentHeightPxAsync(CoreWebView2 core)
+    {
+        const string script = """
+            (() => {
+              const body = document.body;
+              return Math.ceil(Math.max(
+                body ? body.scrollHeight : 0,
+                body ? body.getBoundingClientRect().bottom : 0));
+            })()
+            """;
+
+        var raw = await core.ExecuteScriptAsync(script);
+        if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var cssPx) || cssPx <= 0)
+            throw new PrintFailure("measure_failed", "Could not measure the document.");
+        return (int)cssPx;
     }
 
     private async Task<HtmlPrintResult> PrintOnUiThreadAsync(HtmlJob job)

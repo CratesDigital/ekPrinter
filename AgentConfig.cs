@@ -50,6 +50,13 @@ public sealed class AgentConfig
     public string PairingCode { get; set; } = "";
 
     /// <summary>
+    /// Printers that take HTML jobs as a TSPL image sent straight to the printer,
+    /// past the Windows driver. Set per printer on the agent's own page, and off
+    /// unless asked for: it suits a TSPL printer on a plain roll and nothing else.
+    /// </summary>
+    public List<string> DirectImagePrinters { get; set; } = new();
+
+    /// <summary>
     /// The roaming profile, not the install directory. An installer overwrites
     /// its own directory on upgrade, so config kept beside the executable would
     /// cost the operator their pairing every time the agent updated.
@@ -147,6 +154,24 @@ public sealed class AgentConfig
         }
         if (removed > 0) Save();
         return removed > 0;
+    }
+
+    public bool IsDirectImage(string printer)
+    {
+        lock (_gate)
+        {
+            return DirectImagePrinters.Any(p => string.Equals(p, printer, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public void SetDirectImage(string printer, bool on)
+    {
+        lock (_gate)
+        {
+            DirectImagePrinters.RemoveAll(p => string.Equals(p, printer, StringComparison.OrdinalIgnoreCase));
+            if (on) DirectImagePrinters.Add(printer);
+        }
+        Save();
     }
 
     /// <summary>

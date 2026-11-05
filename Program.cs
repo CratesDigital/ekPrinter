@@ -143,6 +143,18 @@ bool FromAgentPage(HttpContext ctx)
     return string.IsNullOrEmpty(origin) || IsSelf(origin);
 }
 
+// An HTML job, through the Windows driver or, for a printer set to Direct image,
+// as a TSPL image straight to the printer.
+async Task<HtmlPrintResult> PrintHtml(HtmlJob job, string title, CancellationToken cancellation)
+{
+    if (!config.IsDirectImage(job.Printer)) return await html.PrintAsync(job, cancellation);
+
+    var png = await html.RenderAsync(job, TsplRaster.PrintableWidthMm, TsplRaster.DotsPerMm, cancellation);
+    var bytes = TsplRaster.Build(png, job.Copies, out var heightMm);
+    await raw.PrintAsync(job.Printer, bytes, title, cancellation);
+    return new HtmlPrintResult(heightMm);
+}
+
 IResult Error(int status, string code, string message) =>
     Results.Json(new { ok = false, error = code, message }, statusCode: status);
 
@@ -219,7 +231,7 @@ app.MapPost("/v1/print/html", async (HttpContext ctx) =>
     var id = NewJobId();
     try
     {
-        var result = await html.PrintAsync(job, ctx.RequestAborted);
+        var result = await PrintHtml(job, "ekPrinter document", ctx.RequestAborted);
         jobs.Add(new JobRecord(id, DateTime.UtcNow, OriginLabel(origin), printer, "document", true,
             result.FittedHeightMm is { } h ? $"printed, {h:0} mm long" : "printed"));
         return Results.Json(new { ok = true, job = id, fitted_height_mm = result.FittedHeightMm });
@@ -347,9 +359,9 @@ app.MapPost("/v1/test-print", async (HttpContext ctx) =>
     {
         // The printer's own default paper: the test is of the printer and its
         // driver as Windows has them set up, not of a page size we chose.
-        await html.PrintAsync(new HtmlJob(
+        await PrintHtml(new HtmlJob(
             printer, StatusPage.TestPageHtml(printer), new Uri($"https://ekprinter.invalid/test/{id}"),
-            Copies: 1, Page: null, Margins: Margins.None, Color: true, Backgrounds: true), ctx.RequestAborted);
+            Copies: 1, Page: null, Margins: Margins.None, Color: true, Backgrounds: true), "ekPrinter test page", ctx.RequestAborted);
         jobs.Add(new JobRecord(id, DateTime.UtcNow, "agent page", printer, "test page", true, "printed"));
         return Results.Json(new { ok = true, job = id });
     }
@@ -358,6 +370,21 @@ app.MapPost("/v1/test-print", async (HttpContext ctx) =>
         jobs.Add(new JobRecord(id, DateTime.UtcNow, "agent page", printer, "test page", false, ex.Message));
         return Error(500, ex is PrintFailure pf ? pf.Code : "print_failed", ex.Message);
     }
+});
+
+app.MapPost("/v1/direct-image", async (HttpContext ctx) =>
+{
+    if (!FromAgentPage(ctx)) return Error(403, "forbidden", "This is set on the agent's own page.");
+
+    var request = await ReadJson<DirectImageRequest>(ctx);
+    if (request is null || string.IsNullOrWhiteSpace(request.Printer) || request.On is null)
+        return Error(400, "bad_request", "printer and on are required.");
+
+    var printer = ResolvePrinter(request.Printer);
+    if (printer is null) return PrinterNotFound(request.Printer);
+
+    config.SetDirectImage(printer, request.On.Value);
+    return Results.Json(new { ok = true, printer, on = request.On.Value });
 });
 
 // ── Start ────────────────────────────────────────────────────────
@@ -569,3 +596,7 @@ internal sealed record PairRequest([property: JsonPropertyName("code")] string? 
 internal sealed record UnpairRequest([property: JsonPropertyName("origin")] string? Origin);
 
 internal sealed record TestPrintRequest([property: JsonPropertyName("printer")] string? Printer);
+
+internal sealed record DirectImageRequest(
+    [property: JsonPropertyName("printer")] string? Printer,
+    [property: JsonPropertyName("on")] bool? On);

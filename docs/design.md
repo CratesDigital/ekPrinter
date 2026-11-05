@@ -126,6 +126,20 @@ an ESC/POS raster with a cut command through the raw path.
 
 `PrintAsync` resolves once the spooler has the job, not once paper is out.
 
+**Direct image.** A per-printer option, off by default, set on the agent's page
+and kept in `DirectImagePrinters`. The job loads as usual, then the page is
+captured through the DevTools protocol at 8 dots/mm and at most 75 mm wide,
+turned into 1-bit, and sent through the raw path as TSPL: `SIZE 80 mm`,
+`GAP 0,0`, `DIRECTION 1`, `BITMAP`, `PRINT`. The driver and `PrintAsync` are not
+used, and neither are `page.width_mm` above 75 or the margins.
+
+Found on an Xprinter XP-370B on 2026-11-05: through its driver every page lost
+its left side at any width, while a bitmap sent this way started at 0. The TSPL
+values are the ones proven there. `GAP 0,0` means a plain roll: this mode is not
+for labels with gaps. The cash drawer kick is still ESC/POS. *To verify:* the
+capture from the off-screen window on Windows 10 and 11. A hung capture fails the
+job after 20 s, so the site falls back to its print dialog.
+
 **Recovery.** If the WebView2 browser process exits, the WebView is discarded
 and the next job builds a new one. A renderer crash needs nothing: the next
 navigation starts a new renderer.

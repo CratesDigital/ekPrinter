@@ -133,6 +133,9 @@ the paper is out. `fitted_height_mm` is set when the height was fitted.
 - **State the page and margins.** The agent does not read CSS `@page`; it
   prints exactly the page you pass. Without `page` the printer's default paper
   is used.
+- **Direct image.** A printer set to this on the agent's page gets the document
+  as a TSPL image instead of through its driver: at most 75 mm wide, margins
+  ignored, as long as the content unless you pass `height_mm`.
 - **Scripts do not run.** Render everything before you send it: serialize the
   DOM after your barcodes and charts are drawn. Canvas content is lost when a
   DOM is serialized — draw barcodes as SVG or `<img>` with a `data:` URL.

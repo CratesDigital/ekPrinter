@@ -56,8 +56,11 @@ internal static class StatusPage
                       + (p.IsDefault ? " <span class=\"tag\">default</span>" : "")
                       + (p.Status == "ready" ? "" : " <span class=\"tag warn\">" + Esc(p.Status.Replace('_', ' ')) + "</span>")
                       + "<br><span class=\"muted mono\">" + Esc(p.Driver) + " · " + Esc(p.Port) + "</span></span>"
+                      + "<span class=\"actions\"><label class=\"direct\" title=\"For a TSPL label printer on a plain roll, when its driver cuts off or misplaces the page. Sends the page as an image straight to the printer.\">"
+                      + "<input type=\"checkbox\" data-direct=\"" + Esc(p.Name) + "\""
+                      + (config.IsDirectImage(p.Name) ? " checked" : "") + "> Direct image</label>"
                       + "<button class=\"btn small\" data-test=\"" + Esc(p.Name) + "\""
-                      + (runtime is null ? " disabled" : "") + ">Test print</button></li>")) + "</ul>";
+                      + (runtime is null ? " disabled" : "") + ">Test print</button></span></li>")) + "</ul>";
         }
         catch (Exception ex)
         {
@@ -114,6 +117,8 @@ internal static class StatusPage
                 .btn { font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; flex-shrink: 0;
                        border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; cursor: pointer; }
                 .btn.small { font-size: 12px; padding: 5px 10px; }
+                .actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+                .direct { font-size: 12px; white-space: nowrap; cursor: pointer; }
                 .btn:disabled { opacity: .5; cursor: default; }
                 #notice { display: none; font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-top: 12px; }
                 @media (prefers-color-scheme: dark) {
@@ -183,6 +188,14 @@ internal static class StatusPage
                   const d = await post('/v1/test-print', { printer: b.dataset.test });
                   show(d.ok, d.ok ? 'Test page sent to ' + b.dataset.test + '.' : (d.message || 'Printing failed.'));
                   b.disabled = false;
+                }));
+
+                document.querySelectorAll('[data-direct]').forEach(b => b.addEventListener('change', async () => {
+                  const d = await post('/v1/direct-image', { printer: b.dataset.direct, on: b.checked });
+                  if (!d.ok) b.checked = !b.checked;
+                  show(d.ok, d.ok
+                    ? 'Direct image is ' + (d.on ? 'on' : 'off') + ' for ' + d.printer + '.'
+                    : (d.message || 'Could not save that.'));
                 }));
 
                 document.querySelectorAll('[data-unpair]').forEach(b => b.addEventListener('click', async () => {
