@@ -5,11 +5,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-05
+
 ### Added
 - **Direct image**, a per-printer option on the agent's page: HTML jobs and the
   test page are rendered to an image and sent to the printer as TSPL, past the
   Windows driver. For a TSPL printer on a plain 80 mm roll whose driver cuts off
   or misplaces the page (found on an Xprinter XP-370B). Off by default.
+
+## [0.1.1] — 2026-10-07
 
 ### Fixed
 - Pages as small as 5 × 5 mm are accepted, so small barcode labels print;
