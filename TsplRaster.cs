@@ -43,6 +43,12 @@ internal static class TsplRaster
     private const int MinHeightMm = 20;
 
     /// <summary>
+    /// Blank paper under the content, so a tear cannot clip the last line. The page
+    /// is taller than the image, and DIRECTION 1 prints the bottom of the page first.
+    /// </summary>
+    private const int BottomSpaceMm = 5;
+
+    /// <summary>
     /// Lighter than this prints nothing. A thermal head prints a dot or no dot,
     /// and a cut-off above the middle keeps thin strokes of small text whole.
     /// </summary>
@@ -57,12 +63,12 @@ internal static class TsplRaster
         var rowBytes = (source.Width + 7) / 8;
         var bitmap = ToOneBit(source, rowBytes);
 
-        var sizeMm = Math.Max(MinHeightMm, (int)Math.Ceiling(heightDots / (double)DotsPerMm));
+        var sizeMm = Math.Max(MinHeightMm, (int)Math.Ceiling(heightDots / (double)DotsPerMm) + BottomSpaceMm);
         heightMm = sizeMm;
 
         var invariant = CultureInfo.InvariantCulture;
         var header = string.Create(invariant,
-            $"SIZE {PaperWidthMm} mm,{sizeMm} mm\r\nGAP 0,0\r\nDIRECTION 1\r\nCLS\r\nBITMAP 0,0,{rowBytes},{heightDots},0,");
+            $"SIZE {PaperWidthMm} mm,{sizeMm} mm\r\nGAP 0,0\r\nDIRECTION 1\r\nSET TEAR ON\r\nCLS\r\nBITMAP 0,0,{rowBytes},{heightDots},0,");
         var footer = string.Create(invariant, $"\r\nPRINT {copies}\r\n");
 
         using var job = new MemoryStream(header.Length + bitmap.Length + footer.Length);

@@ -5,6 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-11-05
+
+### Changed
+- Direct image sends `SET TEAR ON`, so the top of the page comes out to the tear
+  edge without pressing feed. Tear each page off before the next prints.
+- Direct image leaves 5 mm of blank paper under the content, so a tear cannot
+  clip the barcode.
+
 ## [0.2.0] — 2026-11-05
 
 ### Added
